@@ -11,8 +11,21 @@ const getAll = async (req, res, next) => {
       where.name = { [Op.iLike]: `%${search}%` };
     }
 
-    if (category) {
-      where['$category.name$'] = category;
+    // Configuración del Include de Categoría
+    const categoryInclude = {
+      model: Category,
+      as: 'category',
+      attributes: ['id', 'name'],
+      required: false, // 👈 Importante: asegura que traiga los productos incluso si no tienen categoría asignada
+    };
+
+    // Si filtran por categoría desde el backend
+    if (category && category !== 'Todos') {
+      categoryInclude.where = {
+        name: { [Op.iLike]: category } // Hace la búsqueda insensible a mayúsculas/minúsculas
+      };
+      // Si se filtra por categoría específica, requerimos que exista la relación
+      categoryInclude.required = true; 
     }
 
     if (minPrice || maxPrice) {
@@ -41,38 +54,26 @@ const getAll = async (req, res, next) => {
 
     const products = await Product.findAll({
       where,
-      include: [
-        {
-          model: Category,
-          as: 'category',
-          attributes: ['id', 'name']
-        }
-      ],
+      include: [categoryInclude],
       order,
     });
 
-
     // Convertir precios DECIMAL de Sequelize a números sin .00
-    const formattedProducts = products.map(product => {
+    const formattedProducts = products.map((product) => {
       const data = product.toJSON();
 
       return {
         ...data,
         price: Number(data.price),
-        originalPrice: data.originalPrice
-          ? Number(data.originalPrice)
-          : null
+        originalPrice: data.originalPrice ? Number(data.originalPrice) : null,
       };
     });
 
-
     res.json(formattedProducts);
-
   } catch (error) {
     next(error);
   }
 };
-
 
 // GET /api/products/:id
 const getById = async (req, res, next) => {
@@ -86,7 +87,8 @@ const getById = async (req, res, next) => {
         {
           model: Category,
           as: 'category',
-          attributes: ['id', 'name']
+          attributes: ['id', 'name'],
+          required: false
         }
       ],
     });
@@ -97,44 +99,34 @@ const getById = async (req, res, next) => {
       });
     }
 
-
     const data = product.toJSON();
 
     res.json({
       ...data,
       price: Number(data.price),
-      originalPrice: data.originalPrice
-        ? Number(data.originalPrice)
-        : null
+      originalPrice: data.originalPrice ? Number(data.originalPrice) : null
     });
-
 
   } catch (error) {
     next(error);
   }
 };
-
 
 // POST /api/products (admin)
 const create = async (req, res, next) => {
   try {
     const product = await Product.create(req.body);
-
     const data = product.toJSON();
 
     res.status(201).json({
       ...data,
       price: Number(data.price),
-      originalPrice: data.originalPrice
-        ? Number(data.originalPrice)
-        : null
+      originalPrice: data.originalPrice ? Number(data.originalPrice) : null
     });
-
   } catch (error) {
     next(error);
   }
 };
-
 
 // PUT /api/products/:id (admin)
 const update = async (req, res, next) => {
@@ -148,22 +140,17 @@ const update = async (req, res, next) => {
     }
 
     await product.update(req.body);
-
     const data = product.toJSON();
 
     res.json({
       ...data,
       price: Number(data.price),
-      originalPrice: data.originalPrice
-        ? Number(data.originalPrice)
-        : null
+      originalPrice: data.originalPrice ? Number(data.originalPrice) : null
     });
-
   } catch (error) {
     next(error);
   }
 };
-
 
 // DELETE /api/products/:id (admin)
 const remove = async (req, res, next) => {
@@ -183,12 +170,10 @@ const remove = async (req, res, next) => {
     res.json({
       message: 'Producto eliminado correctamente'
     });
-
   } catch (error) {
     next(error);
   }
 };
-
 
 module.exports = {
   getAll,
